@@ -82,17 +82,10 @@ export async function POST(req: Request) {
             }
           }
 
-          if (event.type === "content_block_stop") {
-            // Check if the completed block was a web_search tool_use
-          }
-
-          if (event.type === "message_stream_event") {
-            const streamEvent = event as { type: string; message?: { stop_reason?: string } };
-            if (streamEvent.message?.stop_reason === "end_turn") {
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`)
-              );
-            }
+          if (event.type === "message_stop") {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`)
+            );
           }
         }
 
