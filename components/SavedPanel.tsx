@@ -20,6 +20,7 @@ export default function SavedPanel({
 }: SavedPanelProps) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [obsidianStatus, setObsidianStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
 
   async function handleSaveReport() {
     const blob = new Blob([fullReport], { type: "text/markdown" });
@@ -31,15 +32,42 @@ export default function SavedPanel({
     URL.revokeObjectURL(url);
   }
 
+  async function handleSaveToObsidian() {
+    setObsidianStatus("saving");
+    try {
+      const res = await fetch("/api/save-to-vault", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          target,
+          rawText: fullReport,
+          date: new Date().toISOString().split("T")[0],
+        }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      setObsidianStatus("done");
+      setTimeout(() => setObsidianStatus("idle"), 3000);
+    } catch {
+      setObsidianStatus("error");
+      setTimeout(() => setObsidianStatus("idle"), 3000);
+    }
+  }
+
   async function handleCopySnippet(text: string) {
     await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
 
+  const obsidianLabel = {
+    idle: "⬡ SAVE TO OBSIDIAN",
+    saving: "SAVING...",
+    done: "✓ SAVED TO VAULT",
+    error: "✕ SAVE FAILED",
+  }[obsidianStatus];
+
   return (
     <div className="border-t border-[#1e1e2e]">
-      {/* Toggle */}
       <button
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#111118] transition-colors"
@@ -56,18 +84,34 @@ export default function SavedPanel({
       </button>
 
       {open && (
-        <div className="px-4 pb-4 flex flex-col gap-3">
-          {/* Save full report */}
+        <div className="px-4 pb-4 flex flex-col gap-2">
           {fullReport && (
-            <button
-              onClick={handleSaveReport}
-              className="w-full py-2 font-mono text-xs text-amber-400 border border-amber-400/30 hover:bg-amber-400/10 transition-colors tracking-widest"
-            >
-              ↓ SAVE FULL REPORT (.md)
-            </button>
+            <>
+              {/* Obsidian save */}
+              <button
+                onClick={handleSaveToObsidian}
+                disabled={obsidianStatus === "saving"}
+                className={`w-full py-2 font-mono text-xs border transition-colors tracking-widest ${
+                  obsidianStatus === "done"
+                    ? "border-green-500/30 text-green-400 bg-green-900/10"
+                    : obsidianStatus === "error"
+                    ? "border-red-500/30 text-red-400"
+                    : "border-purple-500/30 text-purple-300 hover:bg-purple-500/10"
+                }`}
+              >
+                {obsidianLabel}
+              </button>
+
+              {/* Download .md */}
+              <button
+                onClick={handleSaveReport}
+                className="w-full py-2 font-mono text-xs text-amber-400 border border-amber-400/30 hover:bg-amber-400/10 transition-colors tracking-widest"
+              >
+                ↓ DOWNLOAD (.md)
+              </button>
+            </>
           )}
 
-          {/* Snippets */}
           {snippets.length === 0 ? (
             <div className="font-mono text-xs text-gray-600 text-center py-2">
               Select text → save snippet
