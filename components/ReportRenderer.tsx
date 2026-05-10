@@ -27,6 +27,7 @@ const SECTION_ICONS: Record<string, string> = {
   "PATTERNS & FORMULAS": "07",
   "CONTROVERSIES & REAL TALK": "08",
   "YOUR ACTION PLAN": "09",
+  "WHAT NOT TO COPY": "⚠",
 };
 
 // Sections where we want concise output
