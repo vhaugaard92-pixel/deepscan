@@ -13,6 +13,7 @@ const SECTION_ORDER = [
   "PATTERNS & FORMULAS",
   "CONTROVERSIES & REAL TALK",
   "YOUR ACTION PLAN",
+  "WHAT NOT TO COPY",
 ];
 
 const SECTION_ICONS: Record<string, string> = {
