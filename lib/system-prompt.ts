@@ -48,6 +48,12 @@ DEEP sections (5-8 paragraphs, maximum specificity):
 - PATTERNS & FORMULAS: the repeatable mechanics behind their success. Not surface habits — the underlying cause-and-effect. What a 10-year-old could copy.
 - YOUR ACTION PLAN: 5-7 concrete steps based on THEIR exact blueprint. Specific to what this person did, not generic advice.
 
+WHAT NOT TO COPY (2-3 paragraphs):
+- What in their success is unreplicable (looks, family money, right-place-right-time, team size, platform timing)
+- What their audience follows them for that you can't fake
+- What would actually hurt you if you copied it blindly
+Be honest and specific. This is valuable intelligence.
+
 ALWAYS:
 - Use specific numbers, dates, names, dollar amounts
 - Be brutally honest — no PR polish
