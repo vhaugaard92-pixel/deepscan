@@ -2,8 +2,6 @@ import Anthropic from "@anthropic-ai/sdk";
 import { buildSystemPrompt } from "@/lib/system-prompt";
 import { buildQueries } from "@/lib/queries";
 
-export const runtime = "edge";
-
 export async function POST(req: Request) {
   const { name } = await req.json();
 
