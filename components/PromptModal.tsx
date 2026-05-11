@@ -61,7 +61,7 @@ export default function PromptModal({ text, section, target, onClose }: PromptMo
         <div className="px-5 py-3 border-b border-[#1e1e2e] bg-[#0d0d14]">
           <div className="font-mono text-xs text-gray-500 mb-1 tracking-widest">SOURCE</div>
           <div className="text-gray-400 text-xs leading-relaxed line-clamp-3 font-sans">
-            "{text}"
+            &ldquo;{text}&rdquo;
           </div>
         </div>
 
