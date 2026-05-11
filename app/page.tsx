@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import SearchForm from "@/components/SearchForm";
+import AppSidebar from "@/components/AppSidebar";
+import HeroSearch from "@/components/HeroSearch";
+import RecentScans from "@/components/RecentScans";
 import ScanningOverlay from "@/components/ScanningOverlay";
 import ReportRenderer, { parseSections } from "@/components/ReportRenderer";
 import SavedPanel from "@/components/SavedPanel";
@@ -46,7 +48,7 @@ function saveHistory(entries: HistoryEntry[]) {
   try {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(entries.slice(0, HISTORY_MAX)));
   } catch {
-    // ignore quota issues
+    // ignore quota
   }
 }
 
@@ -83,7 +85,6 @@ export default function Home() {
     setRawText("");
     setIsStreaming(false);
     setError(null);
-    // Exit compare mode if starting a new primary scan
     setCompareMode(false);
     setCompareTarget("");
     setCompareRawText("");
@@ -154,7 +155,6 @@ export default function Home() {
             setCompletedQueries(queryLabels);
             setState("report");
 
-            // Save to history
             if (finalRawText.trim()) {
               const entry: HistoryEntry = {
                 id: crypto.randomUUID(),
@@ -227,11 +227,7 @@ export default function Home() {
           if (event.type === "text" && event.text) {
             setCompareRawText((prev) => prev + event.text);
           }
-
-          if (event.type === "done") {
-            setCompareIsScanning(false);
-          }
-
+          if (event.type === "done") setCompareIsScanning(false);
           if (event.type === "error") {
             setError(event.message || "Compare scan error");
             setCompareIsScanning(false);
@@ -247,10 +243,7 @@ export default function Home() {
   }, []);
 
   function handleSaveSnippet(snippet: Omit<SavedSnippet, "id">) {
-    setSavedSnippets((prev) => [
-      { ...snippet, id: crypto.randomUUID() },
-      ...prev,
-    ]);
+    setSavedSnippets((prev) => [{ ...snippet, id: crypto.randomUUID() }, ...prev]);
   }
 
   function handleDeleteSnippet(id: string) {
@@ -282,41 +275,43 @@ export default function Home() {
     });
   }
 
+  function handleGoHome() {
+    setState("idle");
+    setCompareMode(false);
+  }
+
   const sections = parseSections(rawText, isStreaming);
   const compareSections = parseSections(compareRawText, compareIsScanning);
+  const isReport = state === "report";
 
   return (
-    <main className="min-h-screen flex flex-col font-[var(--font-inter)]">
-      {/* Top bar */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-[#1e1e2e]">
-        <div className="font-[var(--font-mono)] text-xs text-amber-400 tracking-widest">
-          DEEPSCAN v1.0
-        </div>
-        <div className="flex items-center gap-4">
-          {state === "report" && !compareMode && (
-            <button
-              onClick={() => setShowCompareForm(true)}
-              className="font-mono text-xs text-amber-400 border border-amber-400/40 hover:bg-amber-400/10 px-3 py-1.5 tracking-widest transition-colors"
-            >
-              ⇄ COMPARE
-            </button>
-          )}
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-            <span className="font-[var(--font-mono)] text-xs text-gray-500">SYSTEM ONLINE</span>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen flex bg-[#0a0a0f]">
+      {/* Icon sidebar — always visible */}
+      <AppSidebar
+        view={isReport ? "report" : "home"}
+        onHome={handleGoHome}
+        onCompare={() => setShowCompareForm(true)}
+        showCompare={isReport && !compareMode && !isStreaming}
+      />
 
-      <div className="flex-1 flex flex-col">
+      {/* Main content */}
+      <div className="flex-1 flex flex-col min-h-screen min-w-0">
+
+        {/* ── IDLE ── */}
         {state === "idle" && (
-          <div className="flex-1 flex items-center justify-center px-6 py-20">
-            <SearchForm onScan={handleScan} />
+          <div className="flex-1 flex flex-col items-center justify-center px-8 py-16">
+            <HeroSearch onScan={handleScan} />
+            <RecentScans
+              entries={history}
+              onLoad={loadFromHistory}
+              onDelete={handleDeleteHistory}
+            />
           </div>
         )}
 
+        {/* ── SCANNING ── */}
         {state === "scanning" && (
-          <div className="flex-1 flex items-center justify-center px-6 py-20">
+          <div className="flex-1 flex items-center justify-center px-8 py-16">
             <ScanningOverlay
               target={target}
               queries={queries}
@@ -326,34 +321,42 @@ export default function Home() {
           </div>
         )}
 
+        {/* ── REPORT ── */}
         {state === "report" && (
-          <div className="flex flex-col lg:flex-row flex-1 min-h-0">
-            {/* Sidebar */}
-            <div className="lg:w-64 flex-shrink-0 border-b lg:border-b-0 lg:border-r border-[#1e1e2e] bg-[#0a0a0f] flex flex-col">
-              <div className="p-4 flex-1 overflow-y-auto">
-                <div className="mb-5">
-                  <SearchForm onScan={handleScan} disabled={isStreaming || compareIsScanning} />
+          <div className="flex flex-1 min-h-0">
+            {/* Report sidebar — info, queries, history, saved */}
+            <div className="w-56 flex-shrink-0 border-r border-[#1e1e2e] flex flex-col bg-[#0a0a0f]">
+              {/* Target name */}
+              <div className="px-4 py-4 border-b border-[#1e1e2e]">
+                <div className="font-mono text-xs text-gray-600 tracking-widest mb-1">TARGET</div>
+                <div className="font-mono text-sm font-bold text-amber-400 truncate">
+                  {target.toUpperCase()}
                 </div>
-                {queries.length > 0 && (
-                  <div>
-                    <div className="font-[var(--font-mono)] text-xs text-gray-600 tracking-widest mb-2">
-                      SEARCHES ({completedQueries.length}/{queries.length})
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      {queries.map((q) => (
-                        <div key={q} className="flex items-center gap-2">
-                          <span className={`font-[var(--font-mono)] text-xs flex-shrink-0 ${completedQueries.includes(q) ? "text-amber-400" : "text-gray-700"}`}>
-                            {completedQueries.includes(q) ? "✓" : "○"}
-                          </span>
-                          <span className={`font-[var(--font-mono)] text-xs truncate ${completedQueries.includes(q) ? "text-gray-400" : "text-gray-700"}`}>
-                            {q}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                {isStreaming && (
+                  <div className="font-mono text-xs text-amber-400 animate-pulse mt-1">SCANNING...</div>
                 )}
               </div>
+
+              {/* Queries */}
+              {queries.length > 0 && (
+                <div className="px-4 py-3 border-b border-[#1e1e2e] flex-shrink-0">
+                  <div className="font-mono text-xs text-gray-700 tracking-widest mb-2">
+                    SEARCHES {completedQueries.length}/{queries.length}
+                  </div>
+                  <div className="flex flex-col gap-1 overflow-y-auto max-h-48">
+                    {queries.map((q) => (
+                      <div key={q} className="flex items-center gap-2">
+                        <span className={`font-mono text-xs flex-shrink-0 ${completedQueries.includes(q) ? "text-amber-400" : "text-gray-700"}`}>
+                          {completedQueries.includes(q) ? "✓" : "○"}
+                        </span>
+                        <span className={`font-mono text-xs truncate ${completedQueries.includes(q) ? "text-gray-500" : "text-gray-700"}`}>
+                          {q}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* History */}
               <HistoryPanel
@@ -362,7 +365,7 @@ export default function Home() {
                 onDelete={handleDeleteHistory}
               />
 
-              {/* Saved panel pinned to bottom of sidebar */}
+              {/* Saved panel */}
               <SavedPanel
                 snippets={savedSnippets}
                 onDelete={handleDeleteSnippet}
@@ -372,8 +375,8 @@ export default function Home() {
               />
             </div>
 
-            {/* Report — scrolls independently */}
-            <div className="flex-1 overflow-y-auto p-6">
+            {/* Report area */}
+            <div className="flex-1 overflow-y-auto p-6 min-w-0">
               {compareMode ? (
                 <CompareLayout
                   leftSections={sections}
@@ -406,7 +409,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* Compare form overlay */}
+      {/* Compare form modal */}
       {showCompareForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
@@ -445,14 +448,14 @@ export default function Home() {
 
       {/* Error toast */}
       {error && (
-        <div className="fixed bottom-4 right-4 bg-red-900/90 border border-red-500 text-red-200 font-[var(--font-mono)] text-xs p-4 max-w-sm">
+        <div className="fixed bottom-4 right-4 bg-red-900/90 border border-red-500 text-red-200 font-mono text-xs p-4 max-w-sm z-50">
           ERROR: {error}
           <button onClick={() => setError(null)} className="ml-4 text-red-400 hover:text-white">
             ✕
           </button>
         </div>
       )}
-    </main>
+    </div>
   );
 }
 
@@ -464,23 +467,18 @@ function CompareForm({ onSubmit }: { onSubmit: (name: string) => void }) {
   }
   return (
     <form onSubmit={handle} className="flex flex-col gap-3">
-      <div className="relative">
-        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-mono text-amber-400 text-sm select-none">
-          TARGET:
-        </span>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Enter compare target..."
-          className="w-full bg-[#0a0a0f] border border-[#1e1e2e] focus:border-amber-400 text-white font-mono text-sm pl-24 pr-4 py-3 outline-none transition-colors placeholder:text-gray-600"
-          autoFocus
-        />
-      </div>
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Enter compare target..."
+        className="w-full bg-[#0a0a0f] border border-[#1e1e2e] focus:border-amber-400 text-white font-mono text-sm px-4 py-3 outline-none transition-colors placeholder:text-gray-600"
+        autoFocus
+      />
       <button
         type="submit"
         disabled={!name.trim()}
-        className="w-full bg-amber-400 hover:bg-amber-300 disabled:bg-[#1e1e2e] disabled:text-gray-600 text-black font-mono font-bold text-sm tracking-[0.2em] uppercase py-3 transition-colors disabled:cursor-not-allowed"
+        className="w-full bg-amber-400 hover:bg-amber-300 disabled:bg-[#1e1e2e] disabled:text-gray-600 text-black font-mono font-bold text-xs tracking-[0.2em] uppercase py-3 transition-colors disabled:cursor-not-allowed"
       >
         START COMPARE SCAN
       </button>
