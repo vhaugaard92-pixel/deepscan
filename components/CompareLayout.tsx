@@ -47,7 +47,7 @@ interface SideProps {
   accent: "white" | "amber";
 }
 
-function SectionList({ sections, streaming, accent }: { sections: ParsedSection[]; streaming: boolean; accent: "white" | "amber" }) {
+function SectionList({ sections, streaming }: { sections: ParsedSection[]; streaming: boolean; accent: "white" | "amber" }) {
   return (
     <div className="flex flex-col gap-3">
       {SECTION_ORDER.map((title) => {
