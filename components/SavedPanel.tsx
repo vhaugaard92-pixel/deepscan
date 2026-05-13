@@ -1,7 +1,38 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SavedSnippet } from "./ReportRenderer";
+
+const IDB_NAME = "deepscan";
+const IDB_STORE = "handles";
+const IDB_KEY = "obsidian-vault-dir";
+
+async function loadHandleFromIDB(): Promise<FileSystemDirectoryHandle | null> {
+  return new Promise((resolve) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => {
+      const tx = req.result.transaction(IDB_STORE, "readonly");
+      const get = tx.objectStore(IDB_STORE).get(IDB_KEY);
+      get.onsuccess = () => resolve((get.result as FileSystemDirectoryHandle) ?? null);
+      get.onerror = () => resolve(null);
+    };
+    req.onerror = () => resolve(null);
+  });
+}
+
+async function saveHandleToIDB(handle: FileSystemDirectoryHandle): Promise<void> {
+  return new Promise((resolve) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => {
+      const tx = req.result.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).put(handle, IDB_KEY);
+      tx.oncomplete = () => resolve();
+    };
+    req.onerror = () => resolve();
+  });
+}
 
 interface SavedPanelProps {
   snippets: SavedSnippet[];
@@ -21,7 +52,44 @@ export default function SavedPanel({
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [obsidianStatus, setObsidianStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
+  const [vaultReady, setVaultReady] = useState(false);
   const vaultDirRef = useRef<FileSystemDirectoryHandle | null>(null);
+
+  // Restore persisted handle on mount
+  useEffect(() => {
+    if (!("showDirectoryPicker" in window)) return;
+    loadHandleFromIDB().then(async (handle) => {
+      if (!handle) return;
+      try {
+        const perm = await handle.queryPermission({ mode: "readwrite" });
+        if (perm === "granted") {
+          vaultDirRef.current = handle;
+          setVaultReady(true);
+        }
+        // If "prompt", we'll request on next save click — don't auto-request without gesture
+      } catch {
+        // stale handle — ignore
+      }
+    });
+  }, []);
+
+  async function getVaultDir(): Promise<FileSystemDirectoryHandle> {
+    if (vaultDirRef.current) {
+      // Re-verify permission (may need re-grant after browser restart)
+      const perm = await vaultDirRef.current.requestPermission({ mode: "readwrite" });
+      if (perm === "granted") return vaultDirRef.current;
+    }
+
+    // Show picker
+    const handle = await (window as unknown as {
+      showDirectoryPicker: (o?: object) => Promise<FileSystemDirectoryHandle>;
+    }).showDirectoryPicker({ id: "obsidian-vault", mode: "readwrite", startIn: "documents" });
+
+    vaultDirRef.current = handle;
+    setVaultReady(true);
+    await saveHandleToIDB(handle);
+    return handle;
+  }
 
   async function handleSaveReport() {
     const blob = new Blob([fullReport], { type: "text/markdown" });
@@ -36,20 +104,9 @@ export default function SavedPanel({
   async function handleSaveToObsidian() {
     setObsidianStatus("saving");
     try {
-      if (!("showDirectoryPicker" in window)) {
-        throw new Error("Browser not supported — use Chrome");
-      }
+      if (!("showDirectoryPicker" in window)) throw new Error("Use Chrome");
 
-      // Pick vault folder once, reuse after
-      if (!vaultDirRef.current) {
-        vaultDirRef.current = await (window as unknown as { showDirectoryPicker: (o?: object) => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker({
-          id: "obsidian-vault",
-          mode: "readwrite",
-          startIn: "documents",
-        });
-      }
-
-      const dir = vaultDirRef.current;
+      const dir = await getVaultDir();
       const date = new Date().toISOString().split("T")[0];
       const slug = target.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
       const filename = `${slug}.md`;
@@ -75,7 +132,6 @@ ${fullReport}
       await writable.write(content);
       await writable.close();
 
-      // Update INDEX.md if it exists
       try {
         const indexHandle = await dir.getFileHandle("INDEX.md", { create: false });
         const file = await indexHandle.getFile();
@@ -87,13 +143,12 @@ ${fullReport}
           await indexWritable.close();
         }
       } catch {
-        // INDEX.md doesn't exist — skip silently
+        // No INDEX.md — fine
       }
 
       setObsidianStatus("done");
       setTimeout(() => setObsidianStatus("idle"), 3000);
     } catch (err) {
-      // User cancelled picker = AbortError — treat as idle, not error
       if (err instanceof Error && err.name === "AbortError") {
         setObsidianStatus("idle");
         return;
@@ -110,7 +165,7 @@ ${fullReport}
   }
 
   const obsidianLabel = {
-    idle: vaultDirRef.current ? "⬡ SAVE TO OBSIDIAN" : "⬡ SAVE TO OBSIDIAN (pick folder)",
+    idle: vaultReady ? "⬡ SAVE TO OBSIDIAN" : "⬡ SAVE TO OBSIDIAN (pick folder once)",
     saving: "SAVING...",
     done: "✓ SAVED TO VAULT",
     error: "✕ SAVE FAILED",
@@ -137,7 +192,6 @@ ${fullReport}
         <div className="px-4 pb-4 flex flex-col gap-2">
           {fullReport && (
             <>
-              {/* Obsidian save */}
               <button
                 onClick={handleSaveToObsidian}
                 disabled={obsidianStatus === "saving"}
@@ -152,7 +206,6 @@ ${fullReport}
                 {obsidianLabel}
               </button>
 
-              {/* Download .md */}
               <button
                 onClick={handleSaveReport}
                 className="w-full py-2 font-mono text-xs text-amber-400 border border-amber-400/30 hover:bg-amber-400/10 transition-colors tracking-widest"
